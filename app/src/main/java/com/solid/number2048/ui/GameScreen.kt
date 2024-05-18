@@ -86,6 +86,7 @@ import com.solid.number2048.game.entities.MergingTargetBox
 import com.solid.number2048.game.entities.UserInputEffects
 import com.solid.number2048.game.entities.bronze
 import com.solid.number2048.ui.compose.CalcRecomposes
+import com.solid.number2048.ui.compose.Thermometer
 import com.solid.number2048.ui.compose.WithMeasures
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -380,42 +381,51 @@ fun ColumnScope.DrawHeader(
     gameScore : State<Int>,
     boxesQueue: State<List<BoxTypes>>
 ){
-    Column(modifier = Modifier
+
+    Box(modifier = Modifier
         .fillMaxWidth()
         .background(Color.DarkGray)
         .weight(1f)
-        .zIndex(666f),
-        verticalArrangement = Arrangement.SpaceEvenly
-    ) {
+        .zIndex(666f)
+    ){
 
-        Text(modifier = Modifier
-            .align(Alignment.CenterHorizontally),
-            text = "Score : ${gameScore.value}",
-            fontSize = 30.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color.White.copy(alpha = 0.6f)
-        )
-
-        Spacer(modifier = Modifier.heightIn(10.dp))
-
-        Row (modifier = Modifier
-            .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            Text(
-                text = "Next box",
-                modifier = Modifier.padding(start = 10.dp),
-                fontSize = 20.sp,
-                color = Color.White.copy(alpha = 0.6f),
-                fontWeight = FontWeight.Bold
-            )
-
-            DrawBoxesQueue(boxesQueue)
-
+        Box(modifier = Modifier
+            .fillMaxSize(),
+            contentAlignment = Alignment.CenterStart
+        ){
+            Thermometer()
         }
 
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 15.dp),
+            contentAlignment = Alignment.TopCenter
+        ){
+            DrawScore(gameScore = gameScore)
+        }
+
+
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 8.dp),
+            contentAlignment = Alignment.BottomEnd
+        ){
+            DrawBoxesQueue(boxesQueue)
+        }
     }
+}
+
+
+@Composable
+fun DrawScore(
+    gameScore : State<Int>,
+){
+    Text(
+        text = "${gameScore.value}",
+        fontSize = 30.sp,
+        fontWeight = FontWeight.ExtraBold,
+        color = Color.White.copy(alpha = 0.6f)
+    )
 }
 
 
@@ -432,7 +442,8 @@ fun DrawBoxesQueue(
     )
 
     Row(
-        modifier = Modifier.offset(x = offsetX.value)
+        modifier = Modifier
+            .offset(x = offsetX.value)
     ) {
 
         queue.value.forEach {
