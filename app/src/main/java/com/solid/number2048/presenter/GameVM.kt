@@ -1,4 +1,5 @@
 package com.solid.number2048.presenter
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.solid.number2048.game.ANIM_SPEED
@@ -6,9 +7,12 @@ import com.solid.number2048.game.BOARD_HEIGHT
 import com.solid.number2048.game.BOARD_WIDTH
 import com.solid.number2048.game.BOXES_QUEUE_SIZE
 import com.solid.number2048.game.FALL_SPEED
+import com.solid.number2048.game.MAX_GAME_SPEED
+import com.solid.number2048.game.MIN_GAME_SPEED
 import com.solid.number2048.game.entities.BoxIdx
 import com.solid.number2048.game.entities.BoxTypes
 import com.solid.number2048.game.entities.FallingBox
+import com.solid.number2048.game.entities.GameSpeed
 import com.solid.number2048.game.entities.GameState
 import com.solid.number2048.game.entities.MergingBox
 import com.solid.number2048.game.entities.MergingTargetBox
@@ -27,7 +31,7 @@ class GameVM : ViewModel() {
 
     private var gameState = GameState.PAUSED
     private var lastGameState = GameState.PLAYING
-    private var gameSpeed = 0.5f
+    private var gameSpeed = MIN_GAME_SPEED
     private var minNumber = 2
     private var maxNumber = 32
     private var lastFrame : Long? = null
@@ -67,6 +71,10 @@ class GameVM : ViewModel() {
     private val _gameScore = MutableStateFlow(0)
     val gameScore = _gameScore.asStateFlow()
 
+    private val _gameSpeed = MutableStateFlow(GameSpeed(speed = convertSpeedToPercentageValue(), color = Color.Blue))
+    val gameSpeedState = _gameSpeed.asStateFlow()
+
+
 
     fun save(){
 
@@ -74,7 +82,6 @@ class GameVM : ViewModel() {
 
 
     }
-
 
 
     fun onNewFrame(frameMills: Long){
@@ -99,11 +106,53 @@ class GameVM : ViewModel() {
                 GameState.CHECKING -> {
                     checkMatches()
                 }
+
+                GameState.GAME_OVER -> {
+                    startNewGame()
+                }
             }
         }
 
         lastFrame = frameMills
     }
+
+
+    private fun startNewGame(){
+
+        gameSpeed = MIN_GAME_SPEED
+        minNumber = 2
+        maxNumber = 32
+        lastFrame = null
+        lastColumn = BOARD_WIDTH / 2
+
+        gameBoard.forEachIndexed { row, boxTypes ->
+            boxTypes.forEachIndexed { col, _ ->
+                gameBoard[row][col] = null
+            }
+        }
+
+        _board.update {
+            gameBoard
+        }
+
+        _fallingBoxes.update {
+            emptyList()
+        }
+
+
+        boxesQueue.clear()
+        _boxesQueueState.update { emptyList() }
+
+        _isGamePlaying.update { true }
+
+        _gameScore.update { 0 }
+
+        _gameSpeed.update { GameSpeed(speed = convertSpeedToPercentageValue(), color = Color.Blue) }
+
+        gameState = GameState.PLAYING
+        lastGameState = GameState.PLAYING
+    }
+
 
 
     private fun onPlayingFrame(delta: Float){
@@ -263,6 +312,13 @@ class GameVM : ViewModel() {
     private fun checkMatches(){
 
         if(checkMatchesStack.isEmpty()){
+            gameBoard[1].forEach {
+                it?.let {
+                    gameState = GameState.GAME_OVER
+                    return
+                }
+            }
+
             gameState = GameState.PLAYING
             return
         }
@@ -379,9 +435,28 @@ class GameVM : ViewModel() {
 
         println(gameSpeed)
 
+        _gameSpeed.update {
+            val speed = convertSpeedToPercentageValue()
+            val color =
+            if(speed < 25) Color.Blue
+            else if (speed < 50) Color.Green
+            else if (speed < 75) Color.Yellow
+            else Color.Red
+            GameSpeed(speed, color)
+        }
+
         _mergeTargetBox.value = targetBox
 
     }
+
+
+
+
+    private fun convertSpeedToPercentageValue() : Int {
+        val speed = (100 * gameSpeed) / MAX_GAME_SPEED
+        return speed.toInt()
+    }
+
 
 
     fun onUserBoardInput(posX: Int, isTap : Boolean){

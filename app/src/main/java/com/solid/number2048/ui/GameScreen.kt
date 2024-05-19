@@ -81,6 +81,7 @@ import com.solid.number2048.ui.theme.BG_8
 import com.solid.number2048.ui.theme.BG_9
 import com.solid.number2048.game.entities.BoxTypes
 import com.solid.number2048.game.entities.FallingBox
+import com.solid.number2048.game.entities.GameSpeed
 import com.solid.number2048.game.entities.MergingBox
 import com.solid.number2048.game.entities.MergingTargetBox
 import com.solid.number2048.game.entities.UserInputEffects
@@ -113,6 +114,7 @@ fun DrawGameScreen(){
 
     val isGamePlaying = gameVM.isGamePlaying.collectAsState()
 
+    val gameSpeed = gameVM.gameSpeedState.collectAsState()
 
     LaunchedEffect(Unit){
         while (true){
@@ -163,12 +165,13 @@ fun DrawGameScreen(){
 
             DrawHeader(
                 gameScore = gameScore,
-                boxesQueue = boxesQueue
+                boxesQueue = boxesQueue,
+                gameSpeed = gameSpeed
             )
 
             BoxWithConstraints(
                 modifier = Modifier
-                    .heightIn(max = (heightDp - 200).dp)
+                    .heightIn(max = (heightDp - 222).dp)
                     .aspectRatio(BOARD_WIDTH / BOARD_HEIGHT.toFloat())
             ) {
 
@@ -379,7 +382,8 @@ fun DrawBoardBG(
 @Composable
 fun ColumnScope.DrawHeader(
     gameScore : State<Int>,
-    boxesQueue: State<List<BoxTypes>>
+    boxesQueue: State<List<BoxTypes>>,
+    gameSpeed: State<GameSpeed>
 ){
 
     Box(modifier = Modifier
@@ -393,7 +397,7 @@ fun ColumnScope.DrawHeader(
             .fillMaxSize(),
             contentAlignment = Alignment.CenterStart
         ){
-            Thermometer()
+            Thermometer(gameSpeed)
         }
 
         Box(modifier = Modifier
@@ -437,7 +441,7 @@ fun DrawBoxesQueue(
     val offsetX = animateDpAsState(
         targetValue = if(queue.value.size == BOXES_QUEUE_SIZE) 0.dp else 50.dp,
         animationSpec = tween(
-            durationMillis = if(queue.value.size == BOXES_QUEUE_SIZE) 300 else 0, easing = LinearEasing
+            durationMillis = if(queue.value.size == BOXES_QUEUE_SIZE) 300  else 0, easing = LinearEasing
         )
     )
 
