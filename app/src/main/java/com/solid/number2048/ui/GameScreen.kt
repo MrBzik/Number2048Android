@@ -18,11 +18,11 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,10 +35,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -48,7 +52,9 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,15 +62,18 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -72,7 +81,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.solid.number2048.game.ANIM_SPEED
 import com.solid.number2048.game.BOARD_HEIGHT
 import com.solid.number2048.game.BOARD_WIDTH
-import com.solid.number2048.game.BOXES_QUEUE_SIZE
+import com.solid.number2048.game.BOXES_QUEUE_MAX
 import com.solid.number2048.game.FALL_SPEED
 import com.solid.number2048.presenter.GameVM
 import com.solid.number2048.ui.theme.BG_6
@@ -84,6 +93,8 @@ import com.solid.number2048.game.entities.FallingBox
 import com.solid.number2048.game.entities.GameSpeed
 import com.solid.number2048.game.entities.MergingBox
 import com.solid.number2048.game.entities.MergingTargetBox
+import com.solid.number2048.game.entities.SpecialItems
+import com.solid.number2048.game.entities.StaticBox
 import com.solid.number2048.game.entities.UserInputEffects
 import com.solid.number2048.game.entities.bronze
 import com.solid.number2048.ui.compose.CalcRecomposes
@@ -193,7 +204,7 @@ fun DrawGameScreen(){
                     }
                 )
 
-                CalcRecomposes("main board")
+                CalcRecomposes("game_screen", "R_GAME_SCREEN")
 
                 DrawBoxes(gameVM, rowWidth)
 
@@ -262,9 +273,9 @@ fun DrawBoxes(
     rowWidth: Dp
 ){
 
-    val curNum = gameVM.curNumBox.collectAsStateWithLifecycle()
-
     val fallingBoxes = gameVM.fallingBoxes.collectAsStateWithLifecycle()
+
+    val curNumBox = gameVM.curNumBox.collectAsStateWithLifecycle()
 
     val mergingBoxes = gameVM.mergingBoxes.collectAsStateWithLifecycle()
 
@@ -272,7 +283,7 @@ fun DrawBoxes(
 
     val mergeTargetBox = gameVM.mergeTargetBox.collectAsStateWithLifecycle()
 
-    CalcRecomposes("ALL BOXES")
+    CalcRecomposes("ALL BOXES", "R_ALL_BOXES")
 
 
     DrawMergingBoxes(
@@ -282,7 +293,7 @@ fun DrawBoxes(
 
 
     DrawCurNum(
-        curNum = curNum,
+        curNum = curNumBox,
         rowWidth = rowWidth
     )
 
@@ -439,15 +450,20 @@ fun DrawBoxesQueue(
 ){
 
     val offsetX = animateDpAsState(
-        targetValue = if(queue.value.size == BOXES_QUEUE_SIZE) 0.dp else 50.dp,
+        targetValue = if(queue.value.size == BOXES_QUEUE_MAX) 0.dp else 50.dp,
         animationSpec = tween(
-            durationMillis = if(queue.value.size == BOXES_QUEUE_SIZE) 300  else 0, easing = LinearEasing
+            durationMillis = if(queue.value.size == BOXES_QUEUE_MAX) 300  else 0, easing = LinearEasing
         )
     )
 
+    
+    CalcRecomposes(label = "Queue", "R_QUEUE")
+    
     Row(
         modifier = Modifier
-            .offset(x = offsetX.value)
+            .offset {
+                IntOffset(x = (offsetX.value * this.density).value.toInt(), y = 0)
+            }
     ) {
 
         queue.value.forEach {
@@ -456,7 +472,8 @@ fun DrawBoxesQueue(
                 numBox = it,
                 x = 0f,
                 y = 0f,
-                rowWidth = 50.dp
+                rowWidth = 50.dp,
+                item = null
             )
         }
     }
@@ -540,6 +557,9 @@ fun DrawMergeTargetBox(
     box: State<MergingTargetBox?>,
     rowWidth: Dp
 ){
+    
+    CalcRecomposes(label = "merging target box", "R_TARGET_BOX")
+
 
     box.value?.let { b ->
 
@@ -562,12 +582,14 @@ fun DrawMergeTargetBox(
             .padding((rowWidth * 0.05f))
             .clip(RoundedCornerShape((rowWidth * 0.1f)))
 //            .border(width = (rowWidth * 0.03f), color = b.startBox.border)
-            .background(color.value),
+            .drawBehind {
+                drawRect(color.value)
+            },
             contentAlignment = Alignment.Center
         ){
             AnimatedContent(targetState = count, transitionSpec = {
                 scaleIn(animationSpec = tween(animSpeed)) togetherWith scaleOut(animationSpec = tween(animSpeed))
-            }){ number ->
+            }, label = "animating box number on merge"){ number ->
 
                 LaunchedEffect(Unit){
                     count = b.targetBox.label
@@ -585,12 +607,22 @@ fun DrawMergingBoxes(
     rowWidth: Dp
 ){
 
-    mergingBoxes.value.forEach {
+    CalcRecomposes(label = "merging boxes", "R_FALLING_BOXES")
+
+
+    val boxesCount = remember {
+        derivedStateOf {
+            mergingBoxes.value.size
+        }
+    }
+
+    repeat(boxesCount.value){
+
         DrawNumBox(
-            numBox = it.numBox,
+            getNumBox = { mergingBoxes.value[it].numBox },
+            getX = { mergingBoxes.value[it].x },
+            getY = { mergingBoxes.value[it].y },
             rowWidth = rowWidth,
-            x = it.x,
-            y = it.y
         )
     }
 }
@@ -600,13 +632,23 @@ fun DrawFallingBoxes(
     fallingBoxes: State<List<FallingBox>>,
     rowWidth: Dp
 ){
+    
+    CalcRecomposes(label = "Drawing falling boxes", "R_FALLING_BOXES")
 
-    fallingBoxes.value.forEach {
+    val fallingBoxesCount = remember {
+        derivedStateOf {
+            fallingBoxes.value.size
+        }
+    }
+
+    repeat(fallingBoxesCount.value){
+
         DrawNumBox(
-            numBox = it.numBox,
+            getNumBox = { fallingBoxes.value[it].numBox},
+            getX = { fallingBoxes.value[it].x },
+            getY = { fallingBoxes.value[it].y},
             rowWidth = rowWidth,
-            x = it.x,
-            y = it.y
+            getItem = {fallingBoxes.value[it].item}
         )
     }
 }
@@ -614,7 +656,7 @@ fun DrawFallingBoxes(
 
 @Composable
 fun DrawBoard(
-    board: State<Array<Array<BoxTypes?>>>,
+    board: State<Array<Array<StaticBox?>>>,
     rowWidth: Dp
 ){
 
@@ -624,10 +666,11 @@ fun DrawBoard(
         numBoxes.forEachIndexed { x, numBox ->
             if(numBox != null){
                 DrawNumBox(
-                    numBox = numBox,
+                    numBox = numBox.boxTypes,
                     rowWidth = rowWidth,
                     x = x.toFloat(),
-                    y = y.toFloat()
+                    y = y.toFloat(),
+                    item = numBox.item
                 )
             }
         }
@@ -638,29 +681,35 @@ fun DrawBoard(
 
 @Composable
 fun DrawCurNum(
-    curNum : State<FallingBox?>,
+    curNum: State<FallingBox?>,
     rowWidth : Dp
 ){
 
-    curNum.value?.let{ box ->
-
-
-        if(box.scale == 1f){
-            DrawNumBox(
-                numBox = box.numBox,
-                rowWidth = rowWidth,
-                x = box.x,
-                y = box.targetY.toFloat(),
-                alpha = 0.2f
-            )
+    val isToDraw = remember {
+        derivedStateOf {
+            curNum.value != null
         }
+    }
+
+    CalcRecomposes(label = "drawCurBox", "R_CUR_BOX")
+
+    if(isToDraw.value){
 
         DrawNumBox(
-            numBox = box.numBox,
+            getNumBox = { curNum.value?.numBox },
+            getX = { curNum.value?.x ?: 0f },
+            getY = { curNum.value?.targetY?.toFloat() ?: 0f},
             rowWidth = rowWidth,
-            x = box.x,
-            y = box.y,
-            scale = box.scale
+            getAlpha = { 0.2f },
+            getItem = { null }
+        )
+        DrawNumBox(
+            getNumBox = { curNum.value?.numBox },
+            getX = { curNum.value?.x ?: 0f},
+            getY = { curNum.value?.y ?: 0f},
+            rowWidth = rowWidth,
+            getScale = { curNum.value?.scale ?: 0f},
+            getItem = { curNum.value?.item},
         )
     }
 }
@@ -673,8 +722,11 @@ fun DrawNumBox(
     y: Float,
     rowWidth: Dp,
     alpha: Float = 1f,
-    scale : Float = 1f
+    scale : Float = 1f,
+    item : SpecialItems?
 ){
+
+//    CalcRecomposes(label = "recomposing box")
 
     Box(modifier = Modifier
         .offset(
@@ -686,16 +738,115 @@ fun DrawNumBox(
         .clip(RoundedCornerShape((rowWidth * 0.1f)))
         .scale(scale)
 //        .border(width = (rowWidth * 0.03f), color = numBox.border.copy(alpha = alpha))
-        .background(numBox.color.copy(alpha = alpha)),
-        contentAlignment = Alignment.Center
+        .background(numBox.color.copy(alpha = alpha))
     ){
         DrawNumberText(numBox.label, rowWidth, alpha)
+
+        item?.let {
+            DrawSpecialItem(item = it)
+        }
     }
 }
 
+
 @Composable
-fun DrawNumberText(num : String, rowWidth: Dp, alpha: Float = 1f){
+fun DrawNumBox(
+    getNumBox: () -> BoxTypes?,
+    getX: () -> Float,
+    getY: () -> Float,
+    rowWidth: Dp,
+    getAlpha: () -> Float = { 1f },
+    getScale: () -> Float = { 1f },
+    getItem : () -> SpecialItems? = { null }
+){
+
+
+    val numBox = remember {
+        getNumBox()
+    }
+
+    val alpha = remember {
+        getAlpha()
+    }
+
+    val item = remember {
+        getItem()
+    }
+
+
+    numBox?.let {
+
+        CalcRecomposes(label = "recomposing box", "R_DRAW_BOX_LAMBDA")
+
+
+        Box(modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = (getX() * rowWidth.value * this.density).toInt(),
+                    y = (getY() * rowWidth.value * this.density).toInt()
+                )
+            }
+            .size(rowWidth)
+            .padding((rowWidth * 0.05f))
+            .clip(RoundedCornerShape((rowWidth * 0.1f)))
+            .graphicsLayer {
+                scaleX = getScale()
+                scaleY = getScale()
+            }
+//        .border(width = (rowWidth * 0.03f), color = numBox.border.copy(alpha = alpha))
+            .background(numBox.color.copy(alpha = alpha))
+        ){
+            DrawNumberText(numBox.label, rowWidth, alpha)
+
+            item?.let {
+                DrawSpecialItem(item = it)
+            }
+        }
+    }
+}
+
+
+
+@Composable
+fun BoxScope.DrawSpecialItem(
+    item: SpecialItems
+){
+
+    var color = Color.Blue
+
+    val icon = when(item){
+        SpecialItems.QUEUE_EXPANDER -> {
+            color = Color.Red
+            Icons.Filled.Add
+        }
+        SpecialItems.QUBE_DESTROYER -> {
+            color = Color.Green
+            Icons.Filled.Build
+        }
+        SpecialItems.EXTRA_LIFE -> {
+            color = Color.Magenta
+            Icons.Filled.Favorite
+        }
+        SpecialItems.SLOW_DOWN -> {
+            Icons.Filled.Star
+        }
+    }
+
+    Icon(
+        imageVector = icon,
+        tint = color,
+        contentDescription = null,
+        modifier = Modifier
+            .fillMaxSize(0.4f)
+            .align(Alignment.TopEnd)
+    )
+
+}
+
+@Composable
+fun BoxScope.DrawNumberText(num : String, rowWidth: Dp, alpha: Float = 1f){
     Text(
+        modifier = Modifier.align(Alignment.Center),
         text = num,
         fontSize = rowWidth.value.sp / (num.length).coerceAtLeast(2),
         fontWeight = FontWeight.ExtraBold,

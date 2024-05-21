@@ -1,17 +1,20 @@
 package com.solid.number2048.ui.compose
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 
 @Composable
 inline fun CalcRecomposes(
-    label: String
+    label: String,
+    tag : String
 ){
-    val count = remember { mutableStateOf(0) }
+    val count = remember { mutableIntStateOf(0) }
     SideEffect {
-        count.value ++
-        println("Recomposes at $label: ${count.value}")
+        count.intValue ++
+        Log.d(tag, "Recomposes at $label: ${count.intValue}")
     }
 }

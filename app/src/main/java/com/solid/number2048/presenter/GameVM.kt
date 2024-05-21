@@ -5,8 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.solid.number2048.game.ANIM_SPEED
 import com.solid.number2048.game.BOARD_HEIGHT
 import com.solid.number2048.game.BOARD_WIDTH
-import com.solid.number2048.game.BOXES_QUEUE_SIZE
+import com.solid.number2048.game.BOXES_QUEUE_MAX
 import com.solid.number2048.game.FALL_SPEED
+import com.solid.number2048.game.ITEM_DESTROYERS_MAX
+import com.solid.number2048.game.ITEM_FREEZERS_MAX
+import com.solid.number2048.game.ITEM_LIVES_MAX
 import com.solid.number2048.game.MAX_GAME_SPEED
 import com.solid.number2048.game.MIN_GAME_SPEED
 import com.solid.number2048.game.entities.BoxIdx
@@ -16,6 +19,8 @@ import com.solid.number2048.game.entities.GameSpeed
 import com.solid.number2048.game.entities.GameState
 import com.solid.number2048.game.entities.MergingBox
 import com.solid.number2048.game.entities.MergingTargetBox
+import com.solid.number2048.game.entities.SpecialItems
+import com.solid.number2048.game.entities.StaticBox
 import com.solid.number2048.game.entities.UserInputEffects
 import com.solid.number2048.game.entities.Vector
 import kotlinx.coroutines.channels.Channel
@@ -24,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Random
 import java.util.Stack
 
 class GameVM : ViewModel() {
@@ -38,8 +44,8 @@ class GameVM : ViewModel() {
 
     private var lastColumn = BOARD_WIDTH / 2
 
-    private val gameBoard : Array<Array<BoxTypes?>> = Array(BOARD_HEIGHT){ Array(BOARD_WIDTH) { null } }
-    private val _board : MutableStateFlow<Array<Array<BoxTypes?>>> = MutableStateFlow(
+    private val gameBoard : Array<Array<StaticBox?>> = Array(BOARD_HEIGHT){ Array(BOARD_WIDTH) { null } }
+    private val _board : MutableStateFlow<Array<Array<StaticBox?>>> = MutableStateFlow(
         gameBoard
     )
     val board = _board.asStateFlow()
@@ -73,6 +79,15 @@ class GameVM : ViewModel() {
 
     private val _gameSpeed = MutableStateFlow(GameSpeed(speed = convertSpeedToPercentageValue(), color = Color.Blue))
     val gameSpeedState = _gameSpeed.asStateFlow()
+
+    private val _lives = MutableStateFlow(0)
+    val lives = _lives.asStateFlow()
+
+    private val _destroyers = MutableStateFlow(0)
+    val destroyers = _destroyers.asStateFlow()
+
+    private val _freezers = MutableStateFlow(0)
+    val freezers = _freezers.asStateFlow()
 
 
 
@@ -156,7 +171,7 @@ class GameVM : ViewModel() {
 
 
     private fun onPlayingFrame(delta: Float){
-        if(boxesQueue.size < BOXES_QUEUE_SIZE){
+        if(boxesQueue.size < BOXES_QUEUE_MAX){
             fillBoxesQueue()
         }
 
@@ -203,7 +218,7 @@ class GameVM : ViewModel() {
         val xIdx = box.x.toInt()
         val targetY = box.targetY
         if(yPos >= targetY){
-            gameBoard[targetY][xIdx] = box.numBox
+            gameBoard[targetY][xIdx] = box.toStaticBox()
             _board.value = getBoardCopy()
             checkMatchesStack.push(BoxIdx(row = targetY, col = xIdx))
             return true
@@ -211,15 +226,15 @@ class GameVM : ViewModel() {
         return false
     }
 
-    private fun getBoardCopy() : Array<Array<BoxTypes?>>{
+    private fun getBoardCopy() : Array<Array<StaticBox?>>{
 
-        val clone = Array<Array<BoxTypes?>>(BOARD_HEIGHT){
+        val clone = Array<Array<StaticBox?>>(BOARD_HEIGHT){
             Array(BOARD_WIDTH){
                 null
             }
         }
 
-        gameBoard.forEachIndexed { y, numBoxes ->
+        gameBoard.forEachIndexed { y, _ ->
             clone[y] = gameBoard[y].clone()
         }
 
@@ -347,11 +362,11 @@ class GameVM : ViewModel() {
 
         fun isMatch(yIdx: Int, xIdx: Int, vector: Vector)  {
             gameBoard[yIdx][xIdx]?.let { match ->
-                if(match.number == numBox.number){
+                if(match.boxTypes.number == numBox.boxTypes.number){
                     isMatchesFound = true
                     boxesToMerge.add(
                         MergingBox(
-                        numBox = match,
+                        numBox = match.boxTypes,
                         x = xIdx.toFloat(),
                         y = yIdx.toFloat(),
                         vector = vector,
@@ -371,7 +386,7 @@ class GameVM : ViewModel() {
 
                         fallingBoxes.add(
                             FallingBox(
-                            numBox = numB,
+                            numBox = numB.boxTypes,
                             x = xIdx.toFloat(),
                             y = i.toFloat(),
                             targetY = i + 1
@@ -527,7 +542,7 @@ class GameVM : ViewModel() {
 
 
     private fun fillBoxesQueue(){
-        while (boxesQueue.size < BOXES_QUEUE_SIZE){
+        while (boxesQueue.size < BOXES_QUEUE_MAX){
             val numBox = BoxTypes.entries.filter {
                 it.number in minNumber..maxNumber
             }.random()
@@ -544,6 +559,23 @@ class GameVM : ViewModel() {
 
         _boxesQueueState.value = boxesQueue.toList()
 
+        var item: SpecialItems? = null
+
+        if(Random().nextInt(100) > 90){
+
+            val items = SpecialItems.entries.filter {
+                when(it){
+                    SpecialItems.QUEUE_EXPANDER -> true
+                    SpecialItems.QUBE_DESTROYER -> _destroyers.value < ITEM_DESTROYERS_MAX
+                    SpecialItems.EXTRA_LIFE -> _lives.value < ITEM_LIVES_MAX
+                    SpecialItems.SLOW_DOWN -> _freezers.value < ITEM_FREEZERS_MAX
+                }
+            }
+
+            if(items.isNotEmpty()) item = items.random()
+        }
+
+
         val x = lastColumn
         val targetY = getDepth(x)
 
@@ -552,7 +584,8 @@ class GameVM : ViewModel() {
             x = x.toFloat(),
             y = 0f,
             targetY = targetY,
-            scale = 0f
+            scale = 0f,
+            item = item
             )
 
     }
