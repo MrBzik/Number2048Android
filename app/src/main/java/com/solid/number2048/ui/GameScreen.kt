@@ -47,6 +47,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
@@ -77,6 +78,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.solid.number2048.game.ANIM_SPEED
 import com.solid.number2048.game.BOARD_HEIGHT
@@ -106,8 +110,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 @Composable
-fun DrawGameScreen(){
-    val gameVM = GameVM()
+fun DrawGameScreen(
+    gameVM: GameVM
+){
 
     val boxesQueue = gameVM.boxesQueueState.collectAsState()
 
@@ -126,6 +131,12 @@ fun DrawGameScreen(){
     val isGamePlaying = gameVM.isGamePlaying.collectAsState()
 
     val gameSpeed = gameVM.gameSpeedState.collectAsState()
+    
+    
+    LifecycleEventEffect(event = Lifecycle.Event.ON_PAUSE) {
+        gameVM.onTogglePlayStop(true)
+    }
+
 
     LaunchedEffect(Unit){
         while (true){
@@ -211,7 +222,6 @@ fun DrawGameScreen(){
                 ShowInvalidInput(isInvalidInput)
 
             }
-
 
             DrawFooter(
                 isPlaying = isGamePlaying,

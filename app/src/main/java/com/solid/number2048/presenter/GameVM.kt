@@ -526,15 +526,15 @@ class GameVM : ViewModel() {
     }
 
 
-    fun onTogglePlayStop(){
+    fun onTogglePlayStop(isOnPauseEvent : Boolean = false){
 
-        if(gameState == GameState.PAUSED){
+        if(gameState == GameState.PAUSED && !isOnPauseEvent){
             gameState = lastGameState
             _isGamePlaying.value = true
         }
         else {
-
-            lastGameState = gameState
+            if(!isOnPauseEvent)
+                lastGameState = gameState
             gameState = GameState.PAUSED
             _isGamePlaying.value = false
         }
