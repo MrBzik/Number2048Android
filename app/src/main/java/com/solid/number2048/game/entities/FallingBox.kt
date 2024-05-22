@@ -9,7 +9,7 @@ data class FallingBox(
     val y: Float,
     val targetY: Int,
     val scale: Float = 1f,
-    val item: SpecialItems? = null
+    val item: SpecialItemsType? = null
 ) {
 
     fun toStaticBox() : StaticBox {

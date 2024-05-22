@@ -47,7 +47,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
@@ -55,7 +54,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -80,7 +78,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.solid.number2048.game.ANIM_SPEED
 import com.solid.number2048.game.BOARD_HEIGHT
@@ -97,7 +94,8 @@ import com.solid.number2048.game.entities.FallingBox
 import com.solid.number2048.game.entities.GameSpeed
 import com.solid.number2048.game.entities.MergingBox
 import com.solid.number2048.game.entities.MergingTargetBox
-import com.solid.number2048.game.entities.SpecialItems
+import com.solid.number2048.game.entities.QueueState
+import com.solid.number2048.game.entities.SpecialItemsType
 import com.solid.number2048.game.entities.StaticBox
 import com.solid.number2048.game.entities.UserInputEffects
 import com.solid.number2048.game.entities.bronze
@@ -158,6 +156,10 @@ fun DrawGameScreen(
                         delay(300)
                         isInvalidInput.value = false
                     }
+                }
+
+                is UserInputEffects.ObtainedItems -> {
+
                 }
             }
         }
@@ -398,10 +400,8 @@ fun ColumnScope.DrawHeader(
 ){
 
     val gameScore : State<Int> = gameVM.gameScore.collectAsStateWithLifecycle()
-    val boxesQueue: State<List<BoxTypes>> = gameVM.boxesQueueState.collectAsStateWithLifecycle()
-    val queueSize : State<Int> = gameVM.queueSize.collectAsStateWithLifecycle()
     val gameSpeed: State<GameSpeed> = gameVM.gameSpeedState.collectAsStateWithLifecycle()
-
+    val queueState = gameVM.queueState.collectAsStateWithLifecycle()
 
     Box(modifier = Modifier
         .fillMaxWidth()
@@ -433,8 +433,7 @@ fun ColumnScope.DrawHeader(
         ){
             DrawBoxesQueueBG()
             DrawBoxesQueue(
-                queue = boxesQueue,
-                queueSize = queueSize
+            queueState = queueState
             )
         }
     }
@@ -474,14 +473,14 @@ fun DrawBoxesQueueBG(){
 
 @Composable
 fun DrawBoxesQueue(
-    queue: State<List<BoxTypes>>,
-    queueSize : State<Int>
+    queueState: State<QueueState>
 ){
 
+
     val offsetX = animateDpAsState(
-        targetValue = if(queue.value.size == queueSize.value) 0.dp else 50.dp,
+        targetValue = if(queueState.value.freeSpots == 0) 0.dp else 50.dp * (queueState.value.freeSpots),
         animationSpec = tween(
-            durationMillis = if(queue.value.size == queueSize.value) 300  else 0, easing = LinearEasing
+            durationMillis = if(queueState.value.freeSpots == 0) 300 else 0, easing = LinearEasing
         ), label = "queue animation"
     )
     
@@ -494,7 +493,7 @@ fun DrawBoxesQueue(
             }
     ) {
 
-        queue.value.forEach {
+        queueState.value.queue.forEach {
 
             DrawNumBox(
                 numBox = it,
@@ -751,7 +750,7 @@ fun DrawNumBox(
     rowWidth: Dp,
     alpha: Float = 1f,
     scale : Float = 1f,
-    item : SpecialItems? = null
+    item : SpecialItemsType? = null
 ){
 
 //    CalcRecomposes(label = "recomposing box")
@@ -785,7 +784,7 @@ fun DrawNumBox(
     rowWidth: Dp,
     getAlpha: () -> Float = { 1f },
     getScale: () -> Float = { 1f },
-    getItem : () -> SpecialItems? = { null }
+    getItem : () -> SpecialItemsType? = { null }
 ){
 
 
@@ -837,25 +836,25 @@ fun DrawNumBox(
 
 @Composable
 fun BoxScope.DrawSpecialItem(
-    item: SpecialItems
+    item: SpecialItemsType
 ){
 
     var color = Color.Blue
 
     val icon = when(item){
-        SpecialItems.QUEUE_EXPANDER -> {
+        SpecialItemsType.QUEUE_EXPANDER -> {
             color = Color.Red
             Icons.Filled.Add
         }
-        SpecialItems.QUBE_DESTROYER -> {
+        SpecialItemsType.QUBE_DESTROYER -> {
             color = Color.Green
             Icons.Filled.Build
         }
-        SpecialItems.EXTRA_LIFE -> {
+        SpecialItemsType.EXTRA_LIFE -> {
             color = Color.Magenta
             Icons.Filled.Favorite
         }
-        SpecialItems.SLOW_DOWN -> {
+        SpecialItemsType.SLOW_DOWN -> {
             Icons.Filled.Star
         }
     }

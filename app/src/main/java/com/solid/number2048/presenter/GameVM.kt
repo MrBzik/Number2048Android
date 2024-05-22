@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.solid.number2048.game.ANIM_SPEED
 import com.solid.number2048.game.BOARD_HEIGHT
 import com.solid.number2048.game.BOARD_WIDTH
-import com.solid.number2048.game.BOXES_QUEUE_MAX
 import com.solid.number2048.game.FALL_SPEED
 import com.solid.number2048.game.ITEM_DESTROYERS_MAX
 import com.solid.number2048.game.ITEM_FREEZERS_MAX
@@ -19,7 +18,9 @@ import com.solid.number2048.game.entities.GameSpeed
 import com.solid.number2048.game.entities.GameState
 import com.solid.number2048.game.entities.MergingBox
 import com.solid.number2048.game.entities.MergingTargetBox
-import com.solid.number2048.game.entities.SpecialItems
+import com.solid.number2048.game.entities.QueueState
+import com.solid.number2048.game.entities.SpecialItem
+import com.solid.number2048.game.entities.SpecialItemsType
 import com.solid.number2048.game.entities.StaticBox
 import com.solid.number2048.game.entities.UserInputEffects
 import com.solid.number2048.game.entities.Vector
@@ -58,12 +59,13 @@ class GameVM : ViewModel() {
 
     private val checkMatchesStack = Stack<BoxIdx>()
 
-    private val _queueSize = MutableStateFlow(1)
-    val queueSize = _queueSize.asStateFlow()
 
+    private var queueSize = 1
+    private var queueToExpand = 0
     private val boxesQueue = ArrayDeque<BoxTypes>()
-    private val _boxesQueueState : MutableStateFlow<List<BoxTypes>> = MutableStateFlow(emptyList())
-    val boxesQueueState = _boxesQueueState.asStateFlow()
+    private val _queueState : MutableStateFlow<QueueState> = MutableStateFlow(QueueState(emptyList(), queueSize))
+    val queueState = _queueState.asStateFlow()
+
 
     private val _curNumBox : MutableStateFlow<FallingBox?> = MutableStateFlow(null)
     val curNumBox = _curNumBox.asStateFlow()
@@ -159,7 +161,12 @@ class GameVM : ViewModel() {
 
 
         boxesQueue.clear()
-        _boxesQueueState.update { emptyList() }
+
+//        _boxesQueueState.update { emptyList() }
+
+        queueSize = 1
+
+        _queueState.update { QueueState(emptyList(), queueSize) }
 
         _isGamePlaying.update { true }
 
@@ -174,7 +181,7 @@ class GameVM : ViewModel() {
 
 
     private fun onPlayingFrame(delta: Float){
-        if(boxesQueue.size < _queueSize.value){
+        if(boxesQueue.size < queueSize){
             fillBoxesQueue()
         }
 
@@ -361,6 +368,7 @@ class GameVM : ViewModel() {
         val numBox = gameBoard[y][x] ?: return false
         val boxesToMerge = mutableListOf<MergingBox>()
         val fallingBoxes = mutableListOf<FallingBox>()
+        val obtainedItems = mutableListOf<SpecialItem>()
         var isMatchesFound = false
 
         fun isMatch(yIdx: Int, xIdx: Int, vector: Vector)  {
@@ -375,25 +383,40 @@ class GameVM : ViewModel() {
                         vector = vector,
                         targetX = x.toFloat(),
                         targetY = y.toFloat()
+                        )
                     )
-                    )
+
+                    val item = gameBoard[yIdx][xIdx]?.item
+
+                    item?.let {
+                        obtainedItems.add(
+                            SpecialItem(
+                                type = it,
+                                row = yIdx,
+                                col = xIdx
+                            )
+                        )
+                    }
+
                     gameBoard[yIdx][xIdx] = null
+
 
                     val startIdx = if(vector == Vector.UP) yIdx - 2 else yIdx - 1
 
                     for(i in startIdx downTo 0){
 
-                        val numB = gameBoard[i][xIdx] ?: break
+                        val box = gameBoard[i][xIdx] ?: break
 
                         gameBoard[i][xIdx] = null
 
                         fallingBoxes.add(
                             FallingBox(
-                            numBox = numB.boxTypes,
+                            numBox = box.boxTypes,
                             x = xIdx.toFloat(),
                             y = i.toFloat(),
-                            targetY = i + 1
-                        )
+                            targetY = i + 1,
+                            item = box.item
+                            )
                         )
                     }
                 }
@@ -413,9 +436,23 @@ class GameVM : ViewModel() {
 
         if(isMatchesFound){
 
+            val item = gameBoard[y][x]?.item
+
+            item?.let {
+                obtainedItems.add(
+                    SpecialItem(
+                        type = it,
+                        row = y,
+                        col = x
+                    )
+                )
+            }
+
             gameBoard[y][x] = null
 
             sendMergingTargetBox(boxesToMerge)
+
+            handleObtainedItems(obtainedItems)
 
             _fallingBoxes.value = fallingBoxes
 
@@ -428,6 +465,30 @@ class GameVM : ViewModel() {
 
         return isMatchesFound
 
+    }
+
+
+    private fun handleObtainedItems(items : List<SpecialItem>){
+
+        if(items.isEmpty()) return
+
+
+        items.forEach {
+
+            when(it.type){
+                SpecialItemsType.QUEUE_EXPANDER -> queueToExpand ++
+                SpecialItemsType.QUBE_DESTROYER -> _destroyers.update { destroyers -> destroyers + 1 }
+                SpecialItemsType.EXTRA_LIFE -> _lives.update { lives -> lives + 1 }
+                SpecialItemsType.SLOW_DOWN -> _freezers.update { freezers -> freezers + 1 }
+            }
+        }
+
+
+        viewModelScope.launch {
+            _userInputEffects.send(
+                UserInputEffects.ObtainedItems(items)
+            )
+        }
     }
 
 
@@ -545,14 +606,17 @@ class GameVM : ViewModel() {
 
 
     private fun fillBoxesQueue(){
-        while (boxesQueue.size < _queueSize.value){
+
+        while (boxesQueue.size < queueSize){
             val numBox = BoxTypes.entries.filter {
                 it.number in minNumber..maxNumber
             }.random()
             boxesQueue.addLast(numBox)
         }
 
-        _boxesQueueState.value = boxesQueue.toList()
+        _queueState.update {
+            it.copy(queue = boxesQueue.toList(), freeSpots = 0)
+        }
     }
 
 
@@ -560,24 +624,17 @@ class GameVM : ViewModel() {
 
         val numBox = boxesQueue.removeFirst()
 
-        _boxesQueueState.value = boxesQueue.toList()
-
-        var item: SpecialItems? = null
-
-        if(Random().nextInt(100) > 90){
-
-            val items = SpecialItems.entries.filter {
-                when(it){
-                    SpecialItems.QUEUE_EXPANDER -> true
-                    SpecialItems.QUBE_DESTROYER -> _destroyers.value < ITEM_DESTROYERS_MAX
-                    SpecialItems.EXTRA_LIFE -> _lives.value < ITEM_LIVES_MAX
-                    SpecialItems.SLOW_DOWN -> _freezers.value < ITEM_FREEZERS_MAX
-                }
-            }
-
-            if(items.isNotEmpty()) item = items.random()
+        if(queueToExpand > 0){
+            queueSize += queueToExpand
+            queueToExpand = 0
         }
 
+        _queueState.update {
+            it.copy(queue = boxesQueue.toList(), freeSpots = queueSize - boxesQueue.size)
+        }
+
+
+        val item = getRandomItem()
 
         val x = lastColumn
         val targetY = getDepth(x)
@@ -592,5 +649,27 @@ class GameVM : ViewModel() {
             )
 
     }
+
+
+    private fun getRandomItem() : SpecialItemsType? {
+        if(Random().nextInt(100) > 70){
+
+            return SpecialItemsType.QUEUE_EXPANDER
+
+//            val items = SpecialItemsType.entries.filter {
+//                when(it){
+//                    SpecialItemsType.QUEUE_EXPANDER -> true
+//                    SpecialItemsType.QUBE_DESTROYER -> _destroyers.value < ITEM_DESTROYERS_MAX
+//                    SpecialItemsType.EXTRA_LIFE -> _lives.value < ITEM_LIVES_MAX
+//                    SpecialItemsType.SLOW_DOWN -> _freezers.value < ITEM_FREEZERS_MAX
+//                }
+//            }
+//
+//            return items.randomOrNull()
+        }
+        else return null
+    }
+
+
 }
 
