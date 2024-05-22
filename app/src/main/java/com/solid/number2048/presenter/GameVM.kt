@@ -58,6 +58,9 @@ class GameVM : ViewModel() {
 
     private val checkMatchesStack = Stack<BoxIdx>()
 
+    private val _queueSize = MutableStateFlow(1)
+    val queueSize = _queueSize.asStateFlow()
+
     private val boxesQueue = ArrayDeque<BoxTypes>()
     private val _boxesQueueState : MutableStateFlow<List<BoxTypes>> = MutableStateFlow(emptyList())
     val boxesQueueState = _boxesQueueState.asStateFlow()
@@ -171,7 +174,7 @@ class GameVM : ViewModel() {
 
 
     private fun onPlayingFrame(delta: Float){
-        if(boxesQueue.size < BOXES_QUEUE_MAX){
+        if(boxesQueue.size < _queueSize.value){
             fillBoxesQueue()
         }
 
@@ -542,7 +545,7 @@ class GameVM : ViewModel() {
 
 
     private fun fillBoxesQueue(){
-        while (boxesQueue.size < BOXES_QUEUE_MAX){
+        while (boxesQueue.size < _queueSize.value){
             val numBox = BoxTypes.entries.filter {
                 it.number in minNumber..maxNumber
             }.random()

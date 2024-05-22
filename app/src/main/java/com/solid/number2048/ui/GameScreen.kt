@@ -114,10 +114,6 @@ fun DrawGameScreen(
     gameVM: GameVM
 ){
 
-    val boxesQueue = gameVM.boxesQueueState.collectAsState()
-
-    val gameScore = gameVM.gameScore.collectAsState()
-
     val density = LocalDensity.current.density
 
     var boardWidth : Dp = 0.dp
@@ -130,9 +126,7 @@ fun DrawGameScreen(
 
     val isGamePlaying = gameVM.isGamePlaying.collectAsState()
 
-    val gameSpeed = gameVM.gameSpeedState.collectAsState()
-    
-    
+
     LifecycleEventEffect(event = Lifecycle.Event.ON_PAUSE) {
         gameVM.onTogglePlayStop(true)
     }
@@ -186,9 +180,7 @@ fun DrawGameScreen(
         ) {
 
             DrawHeader(
-                gameScore = gameScore,
-                boxesQueue = boxesQueue,
-                gameSpeed = gameSpeed
+                gameVM = gameVM
             )
 
             BoxWithConstraints(
@@ -402,10 +394,14 @@ fun DrawBoardBG(
 
 @Composable
 fun ColumnScope.DrawHeader(
-    gameScore : State<Int>,
-    boxesQueue: State<List<BoxTypes>>,
-    gameSpeed: State<GameSpeed>
+    gameVM: GameVM
 ){
+
+    val gameScore : State<Int> = gameVM.gameScore.collectAsStateWithLifecycle()
+    val boxesQueue: State<List<BoxTypes>> = gameVM.boxesQueueState.collectAsStateWithLifecycle()
+    val queueSize : State<Int> = gameVM.queueSize.collectAsStateWithLifecycle()
+    val gameSpeed: State<GameSpeed> = gameVM.gameSpeedState.collectAsStateWithLifecycle()
+
 
     Box(modifier = Modifier
         .fillMaxWidth()
@@ -435,7 +431,11 @@ fun ColumnScope.DrawHeader(
             .padding(bottom = 8.dp),
             contentAlignment = Alignment.BottomEnd
         ){
-            DrawBoxesQueue(boxesQueue)
+            DrawBoxesQueueBG()
+            DrawBoxesQueue(
+                queue = boxesQueue,
+                queueSize = queueSize
+            )
         }
     }
 }
@@ -455,17 +455,35 @@ fun DrawScore(
 
 
 @Composable
+fun DrawBoxesQueueBG(){
+    Row {
+        repeat(BOXES_QUEUE_MAX){
+            Box(modifier = Modifier
+                .size(50.dp)
+                .padding((2.5.dp))
+                .border(
+                    width = (4.dp),
+                    color = Color.LightGray.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(5.dp)
+                )
+            )
+        }
+    }
+}
+
+
+@Composable
 fun DrawBoxesQueue(
-    queue: State<List<BoxTypes>>
+    queue: State<List<BoxTypes>>,
+    queueSize : State<Int>
 ){
 
     val offsetX = animateDpAsState(
-        targetValue = if(queue.value.size == BOXES_QUEUE_MAX) 0.dp else 50.dp,
+        targetValue = if(queue.value.size == queueSize.value) 0.dp else 50.dp,
         animationSpec = tween(
-            durationMillis = if(queue.value.size == BOXES_QUEUE_MAX) 300  else 0, easing = LinearEasing
-        )
+            durationMillis = if(queue.value.size == queueSize.value) 300  else 0, easing = LinearEasing
+        ), label = "queue animation"
     )
-
     
     CalcRecomposes(label = "Queue", "R_QUEUE")
     
@@ -733,7 +751,7 @@ fun DrawNumBox(
     rowWidth: Dp,
     alpha: Float = 1f,
     scale : Float = 1f,
-    item : SpecialItems?
+    item : SpecialItems? = null
 ){
 
 //    CalcRecomposes(label = "recomposing box")
