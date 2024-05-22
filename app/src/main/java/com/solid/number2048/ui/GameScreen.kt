@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -107,6 +108,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+
+
 @Composable
 fun DrawGameScreen(
     gameVM: GameVM
@@ -122,7 +125,15 @@ fun DrawGameScreen(
         mutableStateOf(null)
     }
 
+    val itemsObtained : MutableState<UserInputEffects.ObtainedItems?> = remember {
+
+        mutableStateOf(null)
+    }
+
     val isGamePlaying = gameVM.isGamePlaying.collectAsState()
+
+
+
 
 
     LifecycleEventEffect(event = Lifecycle.Event.ON_PAUSE) {
@@ -159,7 +170,7 @@ fun DrawGameScreen(
                 }
 
                 is UserInputEffects.ObtainedItems -> {
-
+                    itemsObtained.value = it
                 }
             }
         }
@@ -202,6 +213,7 @@ fun DrawGameScreen(
                     rowWidth = rowWidth,
                     maxHeight = maxHeight,
                     clickHighlight = clickHighlight,
+                    itemsObtained = itemsObtained,
                     onUserInput = { offset: Offset, isTap: Boolean ->
                         onUserInput(
                             offset, isTap
@@ -324,8 +336,10 @@ fun DrawBoardBG(
     rowWidth: Dp,
     maxHeight: Dp,
     clickHighlight: State<UserInputEffects.ClickHighlight?>,
+    itemsObtained: State<UserInputEffects.ObtainedItems?>,
     onUserInput : (offset : Offset, isTap: Boolean) -> Unit
 ){
+
 
     Row (modifier = Modifier
         .fillMaxSize()
@@ -362,6 +376,11 @@ fun DrawBoardBG(
         maxHeight = maxHeight
     )
 
+    AnimateObtainedItems(
+        itemsObtained = itemsObtained,
+        rowWidth = rowWidth
+    )
+
 
     Row (
         modifier = Modifier
@@ -388,6 +407,60 @@ fun DrawBoardBG(
                     modifier = Modifier.fillMaxSize()
                 )
 
+            }
+        }
+    }
+}
+
+
+@Composable
+fun AnimateObtainedItems(
+    itemsObtained: State<UserInputEffects.ObtainedItems?>,
+    rowWidth: Dp
+){
+
+    itemsObtained.value?.let {
+
+        val scale = remember(it) { androidx.compose.animation.core.Animatable(1f) }
+        val alphaA = remember(it) { androidx.compose.animation.core.Animatable(1f) }
+
+        LaunchedEffect(key1 = it) {
+            scale.animateTo(targetValue = 4f, animationSpec = tween(300))
+        }
+
+        LaunchedEffect(key1 = it) {
+            alphaA.animateTo(0f, animationSpec = tween(300, delayMillis = 150))
+        }
+
+
+        it.items.forEach {
+
+            Box(
+                modifier = Modifier
+                    .offset {
+                        IntOffset(
+                            x = (it.col * rowWidth.value * this.density).toInt(),
+                            y = (it.row * rowWidth.value * this.density).toInt()
+                        )
+                    }
+                    .size(rowWidth)
+                    .zIndex(99999f)
+                    .padding(rowWidth * 0.05f)
+            ) {
+
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = Color.Red,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = scale.value
+                            scaleY = scale.value
+                            alpha = alphaA.value
+                        }
+                        .fillMaxSize(0.4f)
+                        .align(Alignment.TopEnd)
+                )
             }
         }
     }
@@ -520,7 +593,8 @@ fun HighlightClicks(
 
         val isToShow = remember(cl) { MutableTransitionState(false).apply {
             targetState = true
-        } }
+            }
+        }
 
 
         AnimatedVisibility(
@@ -813,13 +887,14 @@ fun DrawNumBox(
                     y = (getY() * rowWidth.value * this.density).toInt()
                 )
             }
-            .size(rowWidth)
-            .padding((rowWidth * 0.05f))
-            .clip(RoundedCornerShape((rowWidth * 0.1f)))
             .graphicsLayer {
                 scaleX = getScale()
                 scaleY = getScale()
             }
+            .size(rowWidth)
+            .padding((rowWidth * 0.05f))
+            .clip(RoundedCornerShape((rowWidth * 0.1f)))
+
 //        .border(width = (rowWidth * 0.03f), color = numBox.border.copy(alpha = alpha))
             .background(numBox.color.copy(alpha = alpha))
         ){

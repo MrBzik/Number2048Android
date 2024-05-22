@@ -483,7 +483,6 @@ class GameVM : ViewModel() {
             }
         }
 
-
         viewModelScope.launch {
             _userInputEffects.send(
                 UserInputEffects.ObtainedItems(items)
