@@ -133,7 +133,13 @@ fun DrawGameScreen(
     val isGamePlaying = gameVM.isGamePlaying.collectAsState()
 
 
+    LaunchedEffect(key1 = Unit) {
 
+        gameVM.curNumBox.collectLatest {
+            println("GOT UPDATE? : ${it?.y}")
+        }
+
+    }
 
 
     LifecycleEventEffect(event = Lifecycle.Event.ON_PAUSE) {

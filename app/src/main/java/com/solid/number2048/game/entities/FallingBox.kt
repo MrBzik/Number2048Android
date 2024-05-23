@@ -1,6 +1,7 @@
 package com.solid.number2048.game.entities
 
 import androidx.compose.ui.graphics.Color
+import kotlin.random.Random
 
 
 data class FallingBox(
@@ -8,7 +9,7 @@ data class FallingBox(
     val x: Float,
     val y: Float,
     val targetY: Int,
-    val scale: Float = 1f,
+    var scale: Float = 1f,
     val item: SpecialItemsType? = null
 ) {
 
@@ -18,6 +19,7 @@ data class FallingBox(
             boxTypes = numBox
         )
     }
+
 
 }
 

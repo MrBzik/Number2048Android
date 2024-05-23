@@ -1,18 +1,6 @@
-package com.solid.number2048.presenter
+package com.solid.number2048.game
+
 import androidx.compose.ui.graphics.Color
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.solid.number2048.game.ANIM_SPEED
-import com.solid.number2048.game.BOARD_HEIGHT
-import com.solid.number2048.game.BOARD_WIDTH
-import com.solid.number2048.game.BOXES_QUEUE_MAX
-import com.solid.number2048.game.FALL_SPEED
-import com.solid.number2048.game.GameStatesCallback
-import com.solid.number2048.game.ITEM_DESTROYERS_MAX
-import com.solid.number2048.game.ITEM_FREEZERS_MAX
-import com.solid.number2048.game.ITEM_LIVES_MAX
-import com.solid.number2048.game.MAX_GAME_SPEED
-import com.solid.number2048.game.MIN_GAME_SPEED
 import com.solid.number2048.game.entities.BoxIdx
 import com.solid.number2048.game.entities.BoxTypes
 import com.solid.number2048.game.entities.FallingBox
@@ -26,19 +14,13 @@ import com.solid.number2048.game.entities.SpecialItemsType
 import com.solid.number2048.game.entities.StaticBox
 import com.solid.number2048.game.entities.UserInputEffects
 import com.solid.number2048.game.entities.Vector
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import java.util.Random
 import java.util.Stack
 
-class GameVM : ViewModel() {
+class NumbersGame {
 
 
     private var gameState = GameState.PAUSED
@@ -64,14 +46,11 @@ class GameVM : ViewModel() {
 
     private val checkMatchesStack = Stack<BoxIdx>()
 
-
     private var queueSize = 1
     private var queueToExpand = 0
     private val boxesQueue = ArrayDeque<BoxTypes>()
     private val _queueState : MutableStateFlow<QueueState> = MutableStateFlow(QueueState(emptyList(), queueSize))
     val queueState = _queueState.asStateFlow()
-
-
 
     private val _curNumBox : MutableStateFlow<FallingBox?> = MutableStateFlow(null)
     val curNumBox = _curNumBox.asStateFlow()
@@ -79,8 +58,8 @@ class GameVM : ViewModel() {
     private val _mergeTargetBox : MutableStateFlow<MergingTargetBox?> = MutableStateFlow(null)
     val mergeTargetBox = _mergeTargetBox.asStateFlow()
 
-    private val _userInputEffects = Channel<UserInputEffects>()
-    val userInputEffects = _userInputEffects.receiveAsFlow()
+//    private val _userInputEffects = Channel<UserInputEffects>()
+//    val userInputEffects = _userInputEffects.receiveAsFlow()
 
     private val _isGamePlaying = MutableStateFlow(false)
     val isGamePlaying = _isGamePlaying.asStateFlow()
@@ -100,9 +79,12 @@ class GameVM : ViewModel() {
     private val _freezers = MutableStateFlow(0)
     val freezers = _freezers.asStateFlow()
 
+//    private var onGameEventsCallback : ((UserInputEffects) -> Unit)? = null
 
-
-
+    private var gameStateCallbacks : GameStatesCallback? = null
+//    fun setOnGameEventsCallback(callback: (UserInputEffects) -> Unit){
+//        onGameEventsCallback = callback
+//    }
 
     fun save(){
 
@@ -110,6 +92,8 @@ class GameVM : ViewModel() {
 
 
     }
+
+
 
 
     fun onNewFrame(frameMills: Long){
@@ -174,6 +158,9 @@ class GameVM : ViewModel() {
 
         queueSize = 1
 
+
+        gameStateCallbacks?.let { it.onQueueStateUpdate(QueueState(emptyList(), queueSize)) }
+
         _queueState.update { QueueState(emptyList(), queueSize) }
 
         _isGamePlaying.update { true }
@@ -185,7 +172,6 @@ class GameVM : ViewModel() {
         gameState = GameState.PLAYING
         lastGameState = GameState.PLAYING
     }
-
 
 
 
@@ -218,11 +204,6 @@ class GameVM : ViewModel() {
             }
         }
     }
-
-
-
-
-
 
     private fun onFallingBoxesFrame(delta: Float){
         val update = mutableListOf<FallingBox>()
@@ -391,12 +372,12 @@ class GameVM : ViewModel() {
                     isMatchesFound = true
                     boxesToMerge.add(
                         MergingBox(
-                        numBox = match.boxTypes,
-                        x = xIdx.toFloat(),
-                        y = yIdx.toFloat(),
-                        vector = vector,
-                        targetX = x.toFloat(),
-                        targetY = y.toFloat()
+                            numBox = match.boxTypes,
+                            x = xIdx.toFloat(),
+                            y = yIdx.toFloat(),
+                            vector = vector,
+                            targetX = x.toFloat(),
+                            targetY = y.toFloat()
                         )
                     )
 
@@ -425,11 +406,11 @@ class GameVM : ViewModel() {
 
                         fallingBoxes.add(
                             FallingBox(
-                            numBox = box.boxTypes,
-                            x = xIdx.toFloat(),
-                            y = i.toFloat(),
-                            targetY = i + 1,
-                            item = box.item
+                                numBox = box.boxTypes,
+                                x = xIdx.toFloat(),
+                                y = i.toFloat(),
+                                targetY = i + 1,
+                                item = box.item
                             )
                         )
                     }
@@ -497,11 +478,7 @@ class GameVM : ViewModel() {
             }
         }
 
-        viewModelScope.launch {
-            _userInputEffects.send(
-                UserInputEffects.ObtainedItems(items)
-            )
-        }
+        gameStateCallbacks?.onNewGameEvent(UserInputEffects.ObtainedItems(items))
     }
 
 
@@ -528,10 +505,10 @@ class GameVM : ViewModel() {
         _gameSpeed.update {
             val speed = convertSpeedToPercentageValue()
             val color =
-            if(speed < 25) Color.Blue
-            else if (speed < 50) Color.Green
-            else if (speed < 75) Color.Yellow
-            else Color.Red
+                if(speed < 25) Color.Blue
+                else if (speed < 50) Color.Green
+                else if (speed < 75) Color.Yellow
+                else Color.Red
             GameSpeed(speed, color)
         }
 
@@ -556,24 +533,24 @@ class GameVM : ViewModel() {
         _curNumBox.value?.let { box ->
 
             if(!isValidInput(posX, box)){
-                viewModelScope.launch {
-                    _userInputEffects.send(UserInputEffects.InvalidInput)
-                }
+
+                gameStateCallbacks?.onNewGameEvent(UserInputEffects.InvalidInput)
+
                 return
             }
 
             val updatedBox = box.copy(x = posX.toFloat(), targetY = getDepth(posX))
 
             if(isTap){
-                viewModelScope.launch {
-                    _userInputEffects.send(
-                        UserInputEffects.ClickHighlight(
-                            col = posX,
-                            color = box.numBox.color,
-                            id = System.currentTimeMillis()
-                        )
+
+                gameStateCallbacks?.onNewGameEvent(
+                    UserInputEffects.ClickHighlight(
+                        col = posX,
+                        color = box.numBox.color,
+                        id = System.currentTimeMillis()
                     )
-                }
+                )
+
                 gameState = GameState.FALLING
                 _fallingBoxes.value = listOf(updatedBox)
                 lastColumn = posX
@@ -657,7 +634,7 @@ class GameVM : ViewModel() {
             targetY = targetY,
             scale = 0f,
             item = item
-            )
+        )
 
     }
 
@@ -680,5 +657,7 @@ class GameVM : ViewModel() {
     }
 
 
-}
 
+
+
+}

@@ -1,4 +1,4 @@
-package com.solid.number2048.data
+package com.solid.number2048.game.data
 
 import com.solid.number2048.game.entities.BoxTypes
 
