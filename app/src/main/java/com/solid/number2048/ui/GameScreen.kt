@@ -71,6 +71,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -78,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.solid.number2048.game.ANIM_SPEED
@@ -100,6 +102,7 @@ import com.solid.number2048.game.entities.SpecialItemsType
 import com.solid.number2048.game.entities.StaticBox
 import com.solid.number2048.game.entities.UserInputEffects
 import com.solid.number2048.game.entities.bronze
+import com.solid.number2048.presenter.GameViewModel
 import com.solid.number2048.ui.compose.CalcRecomposes
 import com.solid.number2048.ui.compose.Thermometer
 import com.solid.number2048.ui.compose.WithMeasures
@@ -112,7 +115,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun DrawGameScreen(
-    gameVM: GameVM
+    gameVM: GameViewModel
 ){
 
     val density = LocalDensity.current.density
@@ -131,15 +134,6 @@ fun DrawGameScreen(
     }
 
     val isGamePlaying = gameVM.isGamePlaying.collectAsState()
-
-
-    LaunchedEffect(key1 = Unit) {
-
-        gameVM.curNumBox.collectLatest {
-            println("GOT UPDATE? : ${it?.y}")
-        }
-
-    }
 
 
     LifecycleEventEffect(event = Lifecycle.Event.ON_PAUSE) {
@@ -291,7 +285,7 @@ fun ColumnScope.DrawFooter(
 
 @Composable
 fun DrawBoxes(
-    gameVM: GameVM,
+    gameVM: GameViewModel,
     rowWidth: Dp
 ){
 
@@ -475,7 +469,7 @@ fun AnimateObtainedItems(
 
 @Composable
 fun ColumnScope.DrawHeader(
-    gameVM: GameVM
+    gameVM: GameViewModel
 ){
 
     val gameScore : State<Int> = gameVM.gameScore.collectAsStateWithLifecycle()
@@ -897,6 +891,7 @@ fun DrawNumBox(
                 scaleX = getScale()
                 scaleY = getScale()
             }
+
             .size(rowWidth)
             .padding((rowWidth * 0.05f))
             .clip(RoundedCornerShape((rowWidth * 0.1f)))

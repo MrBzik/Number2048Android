@@ -20,7 +20,8 @@ import kotlinx.coroutines.flow.update
 import java.util.Random
 import java.util.Stack
 
-class NumbersGame {
+class NumbersGameWithCalbacks {
+
 
     private var gameState = GameState.PAUSED
     private var lastGameState = GameState.PLAYING
@@ -37,11 +38,9 @@ class NumbersGame {
     )
     val board = _board.asStateFlow()
 
-    private val _fallingBoxes : MutableStateFlow<List<FallingBox>> = MutableStateFlow(emptyList())
-    val fallingBoxes = _fallingBoxes.asStateFlow()
+    private var fallingBoxes : List<FallingBox> = emptyList()
 
-    private val _mergingBoxes : MutableStateFlow<List<MergingBox>> = MutableStateFlow(emptyList())
-    val mergingBoxes = _mergingBoxes.asStateFlow()
+    private var mergingBoxes : List<MergingBox> = emptyList()
 
     private val checkMatchesStack = Stack<BoxIdx>()
 
@@ -51,11 +50,12 @@ class NumbersGame {
     private val _queueState : MutableStateFlow<QueueState> = MutableStateFlow(QueueState(emptyList(), queueSize))
     val queueState = _queueState.asStateFlow()
 
-    private val _curNumBox : MutableStateFlow<FallingBox?> = MutableStateFlow(null)
-    val curNumBox = _curNumBox.asStateFlow()
+    private var curNumBox : FallingBox? = null
 
-    private val _mergeTargetBox : MutableStateFlow<MergingTargetBox?> = MutableStateFlow(null)
-    val mergeTargetBox = _mergeTargetBox.asStateFlow()
+    private var mergeTargetBox : MergingTargetBox? = null
+
+//    private val _userInputEffects = Channel<UserInputEffects>()
+//    val userInputEffects = _userInputEffects.receiveAsFlow()
 
     private val _isGamePlaying = MutableStateFlow(false)
     val isGamePlaying = _isGamePlaying.asStateFlow()
@@ -75,18 +75,16 @@ class NumbersGame {
     private val _freezers = MutableStateFlow(0)
     val freezers = _freezers.asStateFlow()
 
-    private var onGameEventsCallback : OnGameEventsCallback? = null
 
-    fun setOnGameEventsCallback(callback: OnGameEventsCallback){
-        onGameEventsCallback = callback
-    }
-
+    private var gameStateCallbacks : GameStatesCallback? = null
 
     fun save(){
 
 
 
+
     }
+
 
 
     fun onNewFrame(frameMills: Long){
@@ -140,16 +138,16 @@ class NumbersGame {
             gameBoard
         }
 
-        _fallingBoxes.update {
-            emptyList()
-        }
-
+        fallingBoxes = emptyList()
 
         boxesQueue.clear()
 
 //        _boxesQueueState.update { emptyList() }
 
         queueSize = 1
+
+
+        gameStateCallbacks?.let { it.onQueueStateUpdate(QueueState(emptyList(), queueSize)) }
 
         _queueState.update { QueueState(emptyList(), queueSize) }
 
@@ -165,53 +163,51 @@ class NumbersGame {
 
 
 
-
     private fun onPlayingFrame(delta: Float){
         if(boxesQueue.size < queueSize){
             fillBoxesQueue()
         }
 
-        _curNumBox.update {
 
-            if(it == null) {
-                getNextBox()
-            } else {
-                if(it.scale < 1f){
-                    it.copy(scale = (it.scale + delta * ANIM_SPEED)
-                        .coerceAtMost(1f))
+        curNumBox?.let { box ->
+
+            if(box.scale < 1f)
+                curNumBox = box.copy(scale = (box.scale + delta + ANIM_SPEED)
+                    .coerceAtMost(1f)
+                )
+            else {
+                val yPos = box.y + delta * gameSpeed
+                val isDropped = isBoxDroppedOnBoard(box, yPos)
+                if(isDropped){
+                    gameState = GameState.CHECKING
+                    lastColumn = box.x.toInt()
+                    curNumBox = null
                 }
                 else {
-                    val yPos = it.y + delta * gameSpeed
-                    val isDropped = isBoxDroppedOnBoard(it, yPos)
-                    if(isDropped){
-                        gameState = GameState.CHECKING
-                        lastColumn = it.x.toInt()
-                        null
-                    }
-                    else {
-
-                        it.copy(y = yPos)
-                    }
+                    curNumBox = box.copy(y = yPos)
                 }
             }
+        } ?: run {
+            curNumBox = getNextBox()
         }
+
+        gameStateCallbacks?.onPlayableBoxUpdate(curNumBox)
     }
-
-
-
-
-
 
     private fun onFallingBoxesFrame(delta: Float){
         val update = mutableListOf<FallingBox>()
-        _fallingBoxes.value.forEach {
+
+        fallingBoxes.forEach {
             val yPos = it.y + delta * FALL_SPEED
             val isDropped = isBoxDroppedOnBoard(it, yPos)
             if(!isDropped) update.add(it.copy(y = yPos))
         }
         if(update.isEmpty()) gameState = GameState.CHECKING
 
-        _fallingBoxes.value = update
+        fallingBoxes = update
+
+        gameStateCallbacks?.onFallingBoxesUpdate(fallingBoxes)
+
     }
 
 
@@ -246,67 +242,66 @@ class NumbersGame {
 
     private fun onMergeBoxesFrame(delta: Float) {
 
-        _mergingBoxes.update { boxes ->
+        var isMerged = false
 
-            var isMerged = false
+        val update = mutableListOf<MergingBox>()
 
-            val update = mutableListOf<MergingBox>()
-
-            boxes.forEach { box ->
-                var x = box.x
-                var y = box.y
-                when(box.vector){
-                    Vector.UP -> {
-                        y = (y - (delta * ANIM_SPEED)).coerceAtLeast(box.targetY)
-                    }
-                    Vector.LEFT -> {
-                        x = (x - (delta * ANIM_SPEED)).coerceAtLeast(box.targetX)
-                    }
-                    Vector.RIGHT -> {
-                        x = (x + (delta * ANIM_SPEED)).coerceAtMost(box.targetX)
-                    }
+        mergingBoxes.forEach { box ->
+            var x = box.x
+            var y = box.y
+            when(box.vector){
+                Vector.UP -> {
+                    y = (y - (delta * ANIM_SPEED)).coerceAtLeast(box.targetY)
                 }
-                isMerged = x == box.targetX && y == box.targetY
-                update.add(box.copy(x = x, y = y))
+                Vector.LEFT -> {
+                    x = (x - (delta * ANIM_SPEED)).coerceAtLeast(box.targetX)
+                }
+                Vector.RIGHT -> {
+                    x = (x + (delta * ANIM_SPEED)).coerceAtMost(box.targetX)
+                }
             }
-
-            if(isMerged){
-                passMergedBoxForward()
-                gameState = GameState.FALLING
-                emptyList()
-            }
-            else {
-                update
-            }
+            isMerged = x == box.targetX && y == box.targetY
+            update.add(box.copy(x = x, y = y))
         }
+
+        if(isMerged){
+            passMergedBoxForward()
+            gameState = GameState.FALLING
+            mergingBoxes = emptyList()
+        }
+        else {
+            mergingBoxes = update
+        }
+
+        gameStateCallbacks?.onMergingBoxesUpdate(mergingBoxes)
+
     }
 
 
     private fun passMergedBoxForward(){
 
-        _mergeTargetBox.update {
 
-            it?.let { target ->
+        mergeTargetBox?.let { target ->
 
-                _fallingBoxes.update { fallingBoxes ->
+            fallingBoxes = fallingBoxes + FallingBox(
+                numBox = target.targetBox,
+                x = target.x,
+                y = target.y,
+                targetY = getDepth(target.x.toInt())
+            )
 
-                    fallingBoxes + FallingBox(
-                        numBox = target.targetBox,
-                        x = target.x,
-                        y = target.y,
-                        targetY = getDepth(target.x.toInt())
-                    )
-                }
+            gameStateCallbacks?.onFallingBoxesUpdate(fallingBoxes)
 
-                val number = target.targetBox.number
+            val number = target.targetBox.number
 
-                _gameScore.update {  prevScore ->
-                    prevScore + number
-                }
+            _gameScore.update {  prevScore ->
+                prevScore + number
             }
 
-            null
+            mergeTargetBox = null
+            gameStateCallbacks?.onMergingTargetBoxUpdate(null)
         }
+
     }
 
     private fun getDepth(col : Int) : Int {
@@ -446,9 +441,16 @@ class NumbersGame {
 
             handleObtainedItems(obtainedItems)
 
-            _fallingBoxes.value = fallingBoxes
+            this.fallingBoxes = fallingBoxes
 
-            _mergingBoxes.value = boxesToMerge
+            gameStateCallbacks?.apply {
+                onFallingBoxesUpdate(fallingBoxes)
+
+            }
+
+            mergingBoxes = boxesToMerge.also {
+                gameStateCallbacks?.onMergingBoxesUpdate(it)
+            }
 
             _board.value = getBoardCopy()
 
@@ -475,8 +477,7 @@ class NumbersGame {
             }
         }
 
-        onGameEventsCallback?.onGameEvent(UserInputEffects.ObtainedItems(items))
-
+        gameStateCallbacks?.onNewGameEvent(UserInputEffects.ObtainedItems(items))
     }
 
 
@@ -510,7 +511,9 @@ class NumbersGame {
             GameSpeed(speed, color)
         }
 
-        _mergeTargetBox.value = targetBox
+        mergeTargetBox = targetBox.also {
+            gameStateCallbacks?.onMergingTargetBoxUpdate(it)
+        }
 
     }
 
@@ -528,11 +531,11 @@ class NumbersGame {
 
         if(gameState != GameState.PLAYING) return
 
-        _curNumBox.value?.let { box ->
+        curNumBox?.let {  box ->
 
             if(!isValidInput(posX, box)){
 
-                onGameEventsCallback?.onGameEvent(UserInputEffects.InvalidInput)
+                gameStateCallbacks?.onNewGameEvent(UserInputEffects.InvalidInput)
 
                 return
             }
@@ -541,7 +544,7 @@ class NumbersGame {
 
             if(isTap){
 
-                onGameEventsCallback?.onGameEvent(
+                gameStateCallbacks?.onNewGameEvent(
                     UserInputEffects.ClickHighlight(
                         col = posX,
                         color = box.numBox.color,
@@ -550,12 +553,18 @@ class NumbersGame {
                 )
 
                 gameState = GameState.FALLING
-                _fallingBoxes.value = listOf(updatedBox)
+                fallingBoxes = listOf(updatedBox).also {
+                    gameStateCallbacks?.onFallingBoxesUpdate(it)
+                }
+
                 lastColumn = posX
-                _curNumBox.value = null
+                curNumBox = null
             } else {
-                _curNumBox.value = updatedBox
+                curNumBox = updatedBox
             }
+
+            gameStateCallbacks?.onPlayableBoxUpdate(curNumBox)
+
         }
     }
 
@@ -653,6 +662,7 @@ class NumbersGame {
         }
         else return null
     }
+
 
 
 

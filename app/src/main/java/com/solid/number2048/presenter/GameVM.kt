@@ -1,5 +1,6 @@
 package com.solid.number2048.presenter
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.solid.number2048.game.ANIM_SPEED
@@ -7,7 +8,6 @@ import com.solid.number2048.game.BOARD_HEIGHT
 import com.solid.number2048.game.BOARD_WIDTH
 import com.solid.number2048.game.BOXES_QUEUE_MAX
 import com.solid.number2048.game.FALL_SPEED
-import com.solid.number2048.game.GameStatesCallback
 import com.solid.number2048.game.ITEM_DESTROYERS_MAX
 import com.solid.number2048.game.ITEM_FREEZERS_MAX
 import com.solid.number2048.game.ITEM_LIVES_MAX
@@ -27,12 +27,10 @@ import com.solid.number2048.game.entities.StaticBox
 import com.solid.number2048.game.entities.UserInputEffects
 import com.solid.number2048.game.entities.Vector
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Random
@@ -63,6 +61,7 @@ class GameVM : ViewModel() {
     val mergingBoxes = _mergingBoxes.asStateFlow()
 
     private val checkMatchesStack = Stack<BoxIdx>()
+
 
 
     private var queueSize = 1
@@ -101,11 +100,7 @@ class GameVM : ViewModel() {
     val freezers = _freezers.asStateFlow()
 
 
-
-
-
     fun save(){
-
 
 
 
@@ -212,6 +207,7 @@ class GameVM : ViewModel() {
                         null
                     }
                     else {
+
                         it.copy(y = yPos)
                     }
                 }

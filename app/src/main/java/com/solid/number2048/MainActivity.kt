@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.solid.number2048.presenter.GameVM
+import com.solid.number2048.presenter.GameViewModel
 import com.solid.number2048.ui.theme.Number2048Theme
 import compose.DrawGameScreen
 
@@ -15,7 +16,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             Number2048Theme {
-                DrawGameScreen(GameVM())
+                DrawGameScreen(GameViewModel())
             }
         }
     }
